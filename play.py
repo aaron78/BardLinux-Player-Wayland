@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 
-import PySimpleGUI as GUI
 import os.path
-from _thread import start_new_thread
-from glob import glob
 from mido import MidiFile
-from pyautogui import press
 from time import sleep
+import subprocess
+import argparse
 
 
 def note_to_frequency(note):
@@ -70,12 +68,6 @@ def frequency_to_key(frequency):
                      f"\t\t keystroke NOT FOUND, frequency: {frequency}")
 
 
-def read_files(folder):
-    files = glob(os.path.join(folder, "*.mid*"))
-    file_names = [os.path.basename(file) for file in files]
-    return file_names
-
-
 def play_midi(filename):
     # Import the MIDI file
     midi_file = MidiFile(filename)
@@ -90,88 +82,20 @@ def play_midi(filename):
     for message in midi_file.play():
         if hasattr(message, "velocity"):
             if int(message.velocity) > 0:
-                press(frequency_to_key(note_to_frequency(message.note)))
-        if stop:
-            break
-    refresh_window()
+                key = frequency_to_key(note_to_frequency(message.note))
+                subprocess.run(f'/usr/bin/ydotool type -d 512 {key}', shell=True)
 
 
-def refresh_window():
-    window.refresh()
-    window["-STOP-"].update(disabled=True)
+def main():
+    parser = argparse.ArgumentParser(prog='BardPlay', description='Play Music as the Bard in FFXIV')
+    parser.add_argument('filename', help='Path to the midi file to play')
+
+    args = parser.parse_args()
+    if os.path.exists(args.filename):
+        play_midi(args.filename)
+    else:
+        print(f'Invalid file: {args.filename}')
 
 
-# GUI
-
-# Left column
-file_list_column = [
-    [
-        GUI.Text("Select the songs directory"),
-        GUI.In("", size=(25, 1), enable_events=True, key="-FOLDER-"),
-        GUI.FolderBrowse(),
-    ],
-    [
-        GUI.Listbox(values=[],
-                    enable_events=True,
-                    size=(40, 20),
-                    key="-FILE LIST-")
-    ],
-]
-
-# Right column
-button_column = [
-    [GUI.Text("Selected file:")],
-    [GUI.Text(size=(40, 1), key="-TOUT-")],
-    [GUI.Button("Play", enable_events=True, key="-PLAY-", disabled=True)],
-    [GUI.Button("Stop", enable_events=True, key="-STOP-", disabled=True)],
-]
-
-# Full layout with
-layout = [[
-    GUI.Column(file_list_column),
-    GUI.VSeperator(),
-    GUI.Column(button_column),
-]]
-
-window = GUI.Window("BardLinux-Player", layout)
-
-# Run the Event Loop
-
-stop = False
-
-while True:
-    event, values = window.read()
-    stop = False
-
-    # Exit the event loop if it meets these conditions
-    if event == "Exit" or event == GUI.WIN_CLOSED:
-        stop = True
-        break
-
-    # List the files in the directory
-    if event == "-FOLDER-":
-        window["-FILE LIST-"].update(read_files(values["-FOLDER-"]))
-        window["-TOUT-"].update("")
-        window["-PLAY-"].update(disabled=True)
-
-    # A file was chosen from the list
-    elif event == "-FILE LIST-":
-        try:
-            filename = os.path.join(values["-FOLDER-"],
-                                    values["-FILE LIST-"][0])
-            window["-TOUT-"].update(values["-FILE LIST-"][0])
-            window["-PLAY-"].update(disabled=False)
-        except (FileNotFoundError, IndexError):
-            pass
-
-    # Play button pressed
-    elif event == "-PLAY-":
-        window["-STOP-"].update(disabled=False)
-        start_new_thread(play_midi, (filename, ))
-
-    # Stop button pressed
-    elif event == "-STOP-":
-        stop = True
-        window["-STOP-"].update(disabled=True)
-
-window.close()
+if __name__ == '__main__':
+    main()
